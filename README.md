@@ -36,6 +36,8 @@ Envoie la grille à l'API Anthropic (`claude-opus-4-6`) et en reçoit la solutio
 
 ## Installation
 
+![extansion](img/extansion.png)
+
 1. Cloner ou télécharger ce dossier
 2. Ouvrir Chrome → `chrome://extensions/`
 3. Activer le **mode développeur** (toggle en haut à droite)
