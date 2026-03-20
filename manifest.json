@@ -25,7 +25,8 @@
         "https://www.linkedin.com/games/queens/*",
         "https://www.linkedin.com/games/mini-sudoku/*",
         "https://www.linkedin.com/games/tango/*",
-        "https://www.linkedin.com/games/zip/*"
+        "https://www.linkedin.com/games/zip/*",
+        "https://www.linkedin.com/games/patches/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"

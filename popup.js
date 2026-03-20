@@ -21,6 +21,7 @@ chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
   else if (url.includes('queens'))  titleEl.textContent = 'Queens Solver';
   else if (url.includes('tango'))   titleEl.textContent = 'Tango Solver';
   else if (url.includes('/zip'))    titleEl.textContent = 'Zip Solver';
+  else if (url.includes('patches')) titleEl.textContent = 'Patches Solver';
 });
 
 // Restore saved preferences
@@ -52,7 +53,7 @@ solveBtn.addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const url = tab.url || '';
 
-  const knownGames = ['games/queens', 'games/mini-sudoku', 'games/tango', 'games/zip'];
+  const knownGames = ['games/queens', 'games/mini-sudoku', 'games/tango', 'games/zip', 'games/patches'];
   if (!knownGames.some(g => url.includes(g))) {
     setStatus('Ouvrez Queens, Mini Sudoku ou Tango sur LinkedIn.', 'error');
     return;
@@ -84,6 +85,8 @@ solveBtn.addEventListener('click', async () => {
         ? { action: 'solveAndApplyLocal', game: 'tango', cells: response.cells, size: response.size, constraints: response.constraints }
         : game === 'zip'
         ? { action: 'solveAndApplyLocal', game: 'zip', size: response.size, waypoints: response.waypoints }
+        : game === 'patches'
+        ? { action: 'solveAndApplyLocal', game: 'patches', size: response.size, anchors: response.anchors }
         : { action: 'solveAndApplyLocal', game: 'queens', grid: response.grid, size: response.size };
 
       chrome.tabs.sendMessage(tab.id, localMsg, (res) => {

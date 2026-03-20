@@ -20,10 +20,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // ─── Game detection ──────────────────────────────────────────────────────────
 
 function detectGame() {
-  if (document.querySelector('[data-testid="tango-game-container"]')) return 'tango';
-  if (document.querySelector('[data-sudoku-grid="true"]'))            return 'sudoku';
-  if (document.querySelector('[data-cell-content="true"]'))           return 'zip';
-  if (document.querySelector('[data-testid="interactive-grid"]'))     return 'queens';
+  if (document.querySelector('[data-testid="tango-game-container"]'))   return 'tango';
+  if (document.querySelector('[data-sudoku-grid="true"]'))              return 'sudoku';
+  if (document.querySelector('[data-cell-content="true"]'))             return 'zip';
+  if (document.querySelector('[data-testid="patches-game-container"]')) return 'patches';
+  if (document.querySelector('[data-testid="interactive-grid"]'))       return 'queens';
   return null;
 }
 
@@ -612,6 +613,188 @@ async function applyZipSolution(pathCells, size) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// PATCHES
+// ════════════════════════════════════════════════════════════════════════════
+
+const PATCHES_COLOR_NAMES = {
+  '#00AFFF': 'bleu',
+  '#0097A7': 'cyan',
+  '#7C4DFF': 'mauve',
+  '#C49000': 'or',
+  '#E91E63': 'rose',
+  '#4CAF50': 'vert',
+  '#FF5722': 'rouge',
+  '#FF9800': 'orange',
+  '#9C27B0': 'violet',
+  '#795548': 'brun',
+};
+
+function patchesColorName(color, fallbackIndex) {
+  return PATCHES_COLOR_NAMES[color.toUpperCase()]
+    || PATCHES_COLOR_NAMES[color]
+    || `R${fallbackIndex + 1}`;
+}
+
+function readPatchesGrid() {
+  const container = document.querySelector('[data-testid="interactive-grid"]');
+  if (!container) return null;
+
+  const style     = container.getAttribute('style') || '';
+  const sizeMatch = style.match(/--_[a-f0-9]+:\s*(\d+)/);
+  const size      = sizeMatch ? parseInt(sizeMatch[1]) : 5;
+
+  const anchors = [];
+  for (const cell of container.querySelectorAll('[data-cell-idx]')) {
+    const cellStyle  = cell.getAttribute('style') || '';
+    const colorMatch = cellStyle.match(/--d0eb54f0:\s*(#[0-9a-fA-F]+)/);
+    if (!colorMatch) continue;
+
+    const idx      = parseInt(cell.getAttribute('data-cell-idx'));
+    const color    = colorMatch[1];
+    const shapeEl  = cell.querySelector('[data-shape]');
+    const shape    = shapeEl ? shapeEl.getAttribute('data-shape') : 'PatchesShapeConstraint_UNKNOWN';
+    const clueEl   = cell.querySelector('[data-testid^="patches-clue-number-"]');
+    const clueSize = clueEl ? parseInt(clueEl.textContent.trim()) : null;
+
+    anchors.push({ idx, color, size: clueSize, shape });
+  }
+
+  LOG(`Patches — grille ${size}x${size}, ${anchors.length} régions`);
+  anchors.forEach(a => {
+    const r = Math.floor(a.idx / size), c = a.idx % size;
+    LOG(`  ${a.color} taille=${a.size} ${a.shape.replace('PatchesShapeConstraint_', '')} : cell ${a.idx} (ligne ${r + 1}, col ${c + 1})`);
+  });
+
+  return { game: 'patches', size, anchors };
+}
+
+function solvePatchesGrid(size, anchors) {
+  LOG('Solveur Patches (backtracking rectangles)...');
+  const t0    = performance.now();
+  const total = size * size;
+
+  // For each anchor, enumerate all valid rectangle placements
+  const validRects = anchors.map(anchor => {
+    const ar    = Math.floor(anchor.idx / size);
+    const ac    = anchor.idx % size;
+    const n     = anchor.size;
+    const shape = anchor.shape;
+    const rects = [];
+
+    for (let h = 1; h <= n; h++) {
+      if (n % h !== 0) continue;
+      const w = n / h;
+      if (shape === 'PatchesShapeConstraint_HORIZONTAL_RECT' && w <= h) continue;
+      if (shape === 'PatchesShapeConstraint_VERTICAL_RECT'   && h <= w) continue;
+
+      // Enumerate all valid top-left corners where anchor falls inside the rect
+      for (let tr = Math.max(0, ar - h + 1); tr <= ar && tr + h <= size; tr++) {
+        for (let tc = Math.max(0, ac - w + 1); tc <= ac && tc + w <= size; tc++) {
+          rects.push({ tr, tc, h, w });
+        }
+      }
+    }
+    return rects;
+  });
+
+  const rectCells = ({ tr, tc, h, w }) => {
+    const cells = [];
+    for (let r = tr; r < tr + h; r++)
+      for (let c = tc; c < tc + w; c++)
+        cells.push(r * size + c);
+    return cells;
+  };
+
+  // Sort by most constrained first
+  const order      = anchors.map((_, i) => i).sort((a, b) => validRects[a].length - validRects[b].length);
+  const assignment = new Array(anchors.length).fill(null);
+  const usedCells  = new Set();
+
+  const backtrack = step => {
+    if (step === anchors.length) return usedCells.size === total;
+    const ai = order[step];
+    for (const rect of validRects[ai]) {
+      const cells = rectCells(rect);
+      if (cells.some(c => usedCells.has(c))) continue;
+      cells.forEach(c => usedCells.add(c));
+      assignment[ai] = rect;
+      if (backtrack(step + 1)) return true;
+      cells.forEach(c => usedCells.delete(c));
+      assignment[ai] = null;
+    }
+    return false;
+  };
+
+  const solved = backtrack(0);
+  LOG(`Solution en ${(performance.now() - t0).toFixed(2)}ms`);
+  if (!solved) return null;
+
+  const solution = anchors.map((anchor, i) => ({
+    color: anchor.color,
+    ...assignment[i],
+    cells: rectCells(assignment[i]),
+  }));
+
+  // Log visual
+  const nameOf  = solution.map(({ color }, i) => patchesColorName(color, i));
+  const colW    = Math.max(...nameOf.map(n => n.length));
+  const pad     = s => s.padEnd(colW);
+  const grid    = Array.from({ length: size }, () => Array(size).fill(pad('·')));
+  solution.forEach(({ cells }, i) => {
+    cells.forEach(idx => { grid[Math.floor(idx / size)][idx % size] = pad(nameOf[i]); });
+  });
+  LOG('Régions :\n' + grid.map(row => row.join(' ')).join('\n'));
+
+  return solution;
+}
+
+async function applyPatchesSolution(regions, size) {
+  const container = document.querySelector('[data-testid="interactive-grid"]');
+  if (!container) return { success: false, error: 'Grille Patches introuvable.' };
+  LOG(`Application de ${regions.length} régions Patches...`);
+
+  const getCell   = idx => container.querySelector(`[data-cell-idx="${idx}"]`);
+  const getCenter = cell => {
+    const r = cell.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  };
+  const mkPtr = (type, x, y) => new PointerEvent(type, {
+    bubbles: true, cancelable: true, pointerId: 1, isPrimary: true, buttons: 1, clientX: x, clientY: y,
+  });
+
+  for (const region of regions) {
+    const { tr, tc, h, w, cells, color } = region;
+    LOG(`  ${color} : (ligne ${tr + 1}, col ${tc + 1}) → ${h}×${w}`);
+
+    const tlCell = getCell(tr * size + tc);
+    const brCell = getCell((tr + h - 1) * size + (tc + w - 1));
+    if (!tlCell || !brCell) { WARN(`  Cases introuvables pour ${color}`); continue; }
+
+    const { x: sx, y: sy } = getCenter(tlCell);
+    const { x: ex, y: ey } = getCenter(brCell);
+
+    tlCell.dispatchEvent(mkPtr('pointerdown', sx, sy));
+    await sleep(60);
+
+    for (const idx of cells) {
+      const cell = getCell(idx);
+      if (!cell) continue;
+      const { x, y } = getCenter(cell);
+      cell.dispatchEvent(mkPtr('pointerover', x, y));
+      cell.dispatchEvent(mkPtr('pointermove', x, y));
+      document.dispatchEvent(mkPtr('pointermove', x, y));
+      await sleep(20);
+    }
+
+    brCell.dispatchEvent(mkPtr('pointerup', ex, ey));
+    await sleep(150);
+  }
+
+  LOG('Application Patches terminée.');
+  return { success: true };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // MESSAGE LISTENER
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -620,10 +803,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === 'readGrid') {
     const game = detectGame();
     if (!game) { sendResponse({ error: 'Aucun jeu détecté. Est-il chargé ?' }); return true; }
-    const result = game === 'queens' ? readQueensGrid()
-                 : game === 'sudoku' ? readSudokuGrid()
-                 : game === 'tango'  ? readTangoGrid()
-                 :                     readZipGrid();
+    const result = game === 'queens'  ? readQueensGrid()
+                 : game === 'sudoku'  ? readSudokuGrid()
+                 : game === 'tango'   ? readTangoGrid()
+                 : game === 'patches' ? readPatchesGrid()
+                 :                      readZipGrid();
     sendResponse(result || { error: 'Impossible de lire la grille.' });
     return true;
   }
@@ -644,6 +828,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       if (!path) { sendResponse({ success: false, error: 'Aucune solution Zip.' }); return true; }
       applyZipSolution(path, msg.size).then(sendResponse);
 
+    } else if (msg.game === 'patches') {
+      const solution = solvePatchesGrid(msg.size, msg.anchors);
+      if (!solution) { sendResponse({ success: false, error: 'Aucune solution Patches.' }); return true; }
+      applyPatchesSolution(solution, msg.size).then(sendResponse);
+
     } else {
       const solution = solveQueens(msg.grid, msg.size);
       if (!solution) { sendResponse({ success: false, error: 'Aucune solution Queens.' }); return true; }
@@ -659,6 +848,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       applyTangoSolution(msg.cells, msg.solvedGrid, msg.size).then(sendResponse);
     } else if (msg.game === 'zip') {
       applyZipSolution(msg.path, msg.size).then(sendResponse);
+    } else if (msg.game === 'patches') {
+      applyPatchesSolution(msg.solution, msg.size).then(sendResponse);
     } else {
       LOG('Solution Claude Queens :', msg.solution.map(([r, c]) => `(${r + 1},${c + 1})`).join(' '));
       applyQueensSolution(msg.solution).then(sendResponse);
