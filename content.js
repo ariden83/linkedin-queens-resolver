@@ -45,13 +45,26 @@ function cellCoords(cell) {
   return m ? `ligne ${m[1]}, col ${m[2]}` : cell.getAttribute('data-cell-idx');
 }
 
-async function clickUntilState(cell, targetState, maxClicks = 3) {
+function tapPointerOnly(el) {
+  const rect = el.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  const opts = { bubbles: true, cancelable: true, clientX: x, clientY: y };
+  el.dispatchEvent(new MouseEvent('mousedown', { ...opts, buttons: 1 }));
+  el.dispatchEvent(new MouseEvent('mouseup',   { ...opts, buttons: 0 }));
+}
+
+// Cycle : vide(0) → dame(1) → croix(2) → vide(0)
+// Chaque tapPointerOnly avance de 2 états → 2 appels successifs pour aller de vide à dame
+async function clickUntilState(cell, targetState, maxClicks = 6) {
   for (let i = 0; i < maxClicks; i++) {
     const state = getCellState(cell);
     if (state === targetState) return true;
     LOG(`  clic ${i + 1} sur (${cellCoords(cell)}) : "${state}" → "${targetState}"`);
-    cell.click();
-    await waitForStateChange(cell);
+    tapPointerOnly(cell);
+    await sleep(80);
+    tapPointerOnly(cell);
+    await sleep(200);
   }
   const final = getCellState(cell);
   if (final !== targetState) WARN(`  échec : état final "${final}" ≠ cible "${targetState}"`);
@@ -97,20 +110,16 @@ async function applyQueensSolution(solution) {
     if (posMatch) cellMap[`${parseInt(posMatch[1]) - 1},${parseInt(posMatch[2]) - 1}`] = cell;
   }
 
-  const solutionSet = new Set(solution.map(([r, c]) => `${r},${c}`));
-  let resetCount = 0;
-  for (const [key, cell] of Object.entries(cellMap)) {
-    if (!solutionSet.has(key) && getCellState(cell) !== 'empty') {
-      await clickUntilState(cell, 'empty'); resetCount++;
-    }
-  }
-  if (resetCount) LOG(`${resetCount} case(s) remise(s) à vide.`);
-
+  // Cycle : vide → dame → croix → vide ; chaque tap avance de 2 états.
+  // 2 taps depuis vide : vide→croix→dame ✓ (déterministe, pas besoin de lire l'état)
   for (const [row, col] of solution) {
     const cell = cellMap[`${row},${col}`];
     if (!cell) { WARN(`Case introuvable (${row},${col})`); continue; }
-    const ok = await clickUntilState(cell, 'queen');
-    LOG(`  reine (${row + 1},${col + 1}) : ${ok ? 'OK' : 'ECHEC'}`);
+    LOG(`  reine (${row + 1},${col + 1})`);
+    tapPointerOnly(cell);
+    await sleep(80);
+    tapPointerOnly(cell);
+    await sleep(200);
   }
   return { success: true };
 }
