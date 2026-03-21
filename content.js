@@ -17,6 +17,28 @@ function waitForStateChange(el, timeout = 500) {
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Déclenche le compteur en simulant un survol du plateau de jeu
+async function hoverBoard() {
+  const selectors = [
+    '[data-testid="interactive-grid"]', // queens
+    '.sudoku-grid',                      // sudoku
+    '[data-testid="tango-board"]',       // tango
+    '.zip-board',                        // zip
+    '[data-testid="patches-board"]',     // patches
+    '.game-board',                       // fallback générique
+  ];
+  const board = selectors.reduce((found, sel) => found || document.querySelector(sel), null);
+  if (!board) return;
+  const rect = board.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top  + rect.height / 2;
+  const opts = { bubbles: true, cancelable: true, clientX: cx, clientY: cy };
+  board.dispatchEvent(new MouseEvent('mouseenter', opts));
+  board.dispatchEvent(new MouseEvent('mouseover',  opts));
+  board.dispatchEvent(new MouseEvent('mousemove',  opts));
+  await sleep(100);
+}
+
 // ─── Game detection ──────────────────────────────────────────────────────────
 
 function detectGame() {
@@ -939,6 +961,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.action === 'solveAndApplyLocal') {
+    hoverBoard();
     if (msg.game === 'sudoku') {
       const solved = solveSudoku(msg.board, msg.rows, msg.cols);
       if (!solved) { sendResponse({ success: false, error: 'Aucune solution Sudoku.' }); return true; }
@@ -968,6 +991,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.action === 'applySolution') {
+    hoverBoard();
     if (msg.game === 'sudoku') {
       applySudokuSolution(msg.board, msg.solvedGrid, msg.rows, msg.cols).then(sendResponse);
     } else if (msg.game === 'tango') {
