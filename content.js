@@ -222,19 +222,6 @@ async function applySudokuSolution(board, solvedGrid, rows, cols) {
   if (!gridEl) return { success: false, error: 'Grille Sudoku introuvable.' };
   LOG('Application Sudoku...');
 
-  const tap = (el) => {
-    const rect = el.getBoundingClientRect();
-    const x = rect.left + rect.width / 2;
-    const y = rect.top + rect.height / 2;
-    const pOpts = { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 1, isPrimary: true };
-    const mOpts = { bubbles: true, cancelable: true, clientX: x, clientY: y };
-    el.dispatchEvent(new PointerEvent('pointerdown', { ...pOpts, buttons: 1 }));
-    el.dispatchEvent(new MouseEvent ('mousedown',   { ...mOpts, buttons: 1 }));
-    el.dispatchEvent(new PointerEvent('pointerup',   { ...pOpts, buttons: 0 }));
-    el.dispatchEvent(new MouseEvent ('mouseup',     { ...mOpts, buttons: 0 }));
-    el.dispatchEvent(new MouseEvent ('click',       { ...mOpts }));
-  };
-
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (board[r][c].given || board[r][c].value !== 0) continue;
@@ -242,8 +229,8 @@ async function applySudokuSolution(board, solvedGrid, rows, cols) {
       if (!cell) { WARN(`Case introuvable (${r},${c})`); continue; }
       const btn = document.querySelector(`.sudoku-input-button[data-number="${solvedGrid[r][c]}"]`);
       if (!btn) { WARN(`Bouton ${solvedGrid[r][c]} introuvable`); continue; }
-      tap(cell); await sleep(200);
-      tap(btn);  await sleep(200);
+      tapEl(cell); await sleep(200);
+      tapEl(btn);  await sleep(200);
       LOG(`  (${r + 1},${c + 1}) = ${solvedGrid[r][c]}`);
     }
   }
@@ -371,11 +358,24 @@ function getTangoState(cell) {
   return -1;
 }
 
+function tapEl(el) {
+  const rect = el.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+  const pOpts = { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 1, isPrimary: true };
+  const mOpts = { bubbles: true, cancelable: true, clientX: x, clientY: y };
+  el.dispatchEvent(new PointerEvent('pointerdown', { ...pOpts, buttons: 1 }));
+  el.dispatchEvent(new MouseEvent ('mousedown',   { ...mOpts, buttons: 1 }));
+  el.dispatchEvent(new PointerEvent('pointerup',   { ...pOpts, buttons: 0 }));
+  el.dispatchEvent(new MouseEvent ('mouseup',     { ...mOpts, buttons: 0 }));
+  el.dispatchEvent(new MouseEvent ('click',       mOpts));
+}
+
 async function clickUntilTangoValue(cell, targetVal) {
   for (let i = 0; i < 4; i++) {
     if (getTangoState(cell) === targetVal) return true;
-    cell.click();
-    await waitForStateChange(cell);
+    tapEl(cell);
+    await sleep(200);
   }
   return getTangoState(cell) === targetVal;
 }
