@@ -139,9 +139,9 @@ async function applyQueensSolution(solution) {
     if (!cell) { WARN(`Case introuvable (${row},${col})`); continue; }
     LOG(`  reine (${row + 1},${col + 1})`);
     tapPointerOnly(cell);
-    await sleep(160);
+    await sleep(320);
     tapPointerOnly(cell);
-    await sleep(400);
+    await sleep(800);
   }
   return { success: true };
 }
