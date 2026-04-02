@@ -273,8 +273,10 @@ async function applySudokuSolution(board, solvedGrid, rows, cols) {
 // ════════════════════════════════════════════════════════════════════════════
 
 // CSS classes that encode constraint direction
-const TANGO_CLASS_HORIZONTAL = '_4c3a3cab'; // constraint → right neighbor (idx+1)
-const TANGO_CLASS_VERTICAL   = '_6f718039'; // constraint → bottom neighbor (idx+size)
+// tango.html (v1):   horizontal=f684ab53  vertical=_4bbcfc68
+// tango_V2.html (v2): horizontal=_309210d7 vertical=c8bf568c
+const TANGO_CLASS_HORIZONTAL = '_309210d7';  // constraint → right neighbor (idx+1)
+const TANGO_CLASS_VERTICAL   = 'c8bf568c';  // constraint → bottom neighbor (idx+size)
 
 function readTangoGrid() {
   const container = document.querySelector('[data-testid="interactive-grid"]');
@@ -414,7 +416,7 @@ async function clickUntilTangoValue(cell, container, targetVal) {
     if (getTangoState(cell) === targetVal) return true;
     nudgeHover(container);
     tapEl(cell);
-    await sleep(400);
+    await sleep(250);
   }
   return getTangoState(cell) === targetVal;
 }
@@ -434,7 +436,7 @@ async function applyTangoSolution(originalCells, solvedGrid, size) {
     const ok = await clickUntilTangoValue(cell, container, target);
     const r = Math.floor(idx / size), c = idx % size;
     LOG(`  (${r + 1},${c + 1}) = ${symbols[target]} : ${ok ? 'OK' : 'ECHEC'}`);
-    await sleep(150);
+    await sleep(80);
   }
   return { success: true };
 }
